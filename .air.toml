@@ -1,0 +1,33 @@
+# Config file for Air (https://github.com/cosmtrek/air)
+
+# Working directory
+root = "."
+tmp_dir = "tmp"
+
+# Watched directories or files
+[build]
+  cmd = "go build -o ./tmp/main ./main.go"
+  bin = "./tmp/main"
+  full_bin = ""
+  include_ext = ["go"]
+  exclude_dir = ["assets", "bin", "docs", "vendor"]
+  exclude_file = []
+  delay = 1000
+  grace_period = 1000
+  kill_delay = 500
+  send_interrupt = false
+  foreground = false
+
+# log format
+[log]
+  level = "info"
+  color = "true"
+
+# Watching settings
+[watch]
+  # Folders to watch
+  dirs = ["."]
+  # Extensions to watch
+  extensions = ["go"]
+  # Files to ignore
+  ignore = ["*.go", "**/tmp/**"]
