@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,21 +11,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ConvertMP3ToMP4(c *gin.Context) {
-	handleFileConversion(c, ".mp3", "_converted.mp4", []string{"-c:a", "aac"})
+func ConvertMP3ToMP4(c *gin.Context, file *multipart.FileHeader) {
+	handleFileConversion(c, file, ".mp3", "_converted.mp4", []string{"-c:a", "aac"})
 }
 
-func ConvertMKVToMP4(c *gin.Context) {
-	handleFileConversion(c, ".mkv", "_converted.mp4", []string{"-c:v", "copy", "-c:a", "aac"})
+func ConvertMKVToMP4(c *gin.Context, file *multipart.FileHeader) {
+	handleFileConversion(c, file, ".mkv", "_converted.mp4", []string{"-c:v", "copy", "-c:a", "aac"})
 }
 
-func handleFileConversion(c *gin.Context, expectedExt, outputSuffix string, ffmpegArgs []string) {
-
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("No %s file uploaded.", expectedExt)})
-		return
-	}
+func handleFileConversion(c *gin.Context, file *multipart.FileHeader, expectedExt, outputSuffix string, ffmpegArgs []string) {
 
 	if filepath.Ext(file.Filename) != expectedExt {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Uploaded file is not a %s file.", expectedExt)})

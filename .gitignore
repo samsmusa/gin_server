@@ -31,3 +31,4 @@ tmp/
 go.mod
 go.sum
 docs/
+temp/

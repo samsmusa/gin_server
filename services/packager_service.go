@@ -195,12 +195,7 @@ func GetShakaPackagerInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, parsedMetadata)
 }
 
-func GetFileInfo(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file uploaded"})
-		return
-	}
+func GetFileInfo(c *gin.Context, file *multipart.FileHeader) {
 
 	tempDir := "./temp"
 	if !CreateTempDir(c, tempDir) {
