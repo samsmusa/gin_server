@@ -225,8 +225,104 @@ func GetFileInfo(c *gin.Context, file *multipart.FileHeader) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse metadata"})
 		return
 	}
-
+	fmt.Println(parsedMetadata)
 	parsedMetadata["packaging_status"] = "completed successfully"
 
 	c.JSON(http.StatusOK, parsedMetadata)
+}
+
+func ConvertToHLS(c *gin.Context, file *multipart.FileHeader) {
+	tempDir := "./temp"
+	if !CreateTempDir(c, tempDir) {
+		return
+	}
+	defer CleanupTempDir(tempDir)
+
+	tempFilePath := filepath.Join(tempDir, file.Filename)
+	if err := c.SaveUploadedFile(file, tempFilePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save uploaded file"})
+		return
+	}
+
+	cmd := exec.Command("ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", tempFilePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("FFprobe Error: %v, Output: %s", err, string(output))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve file metadata",
+			"details": string(output),
+		})
+		return
+	}
+
+	var metadata map[string]interface{}
+	if err := json.Unmarshal(output, &metadata); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse metadata"})
+		return
+	}
+
+	fmt.Println(metadata)
+
+	streams, ok := metadata["streams"].([]interface{})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No streams found in metadata"})
+		return
+	}
+
+	packagerCommand := []string{}
+	outputFiles := []string{}
+
+	for i, stream := range streams {
+		streamMap, ok := stream.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		streamType, ok := streamMap["codec_type"].(string)
+		if !ok {
+			continue
+		}
+
+		switch streamType {
+		case "video":
+			outputFile := filepath.Join(tempDir, fmt.Sprintf("video_%d.mp4", i))
+			packagerCommand = append(packagerCommand, fmt.Sprintf("input=%s,stream=video,stream_selector=%d,output=%s", tempFilePath, i, outputFile))
+			outputFiles = append(outputFiles, outputFile)
+
+		case "audio":
+			language := "und"
+			if lang, exists := streamMap["tags"].(map[string]interface{})["language"]; exists {
+				language, _ = lang.(string)
+			}
+			outputFile := filepath.Join(tempDir, fmt.Sprintf("audio_%s_%d.mp4", language, i))
+			playlistName := fmt.Sprintf("audio_%s_%d.m3u8", language, i)
+			packagerCommand = append(packagerCommand, fmt.Sprintf("input=%s,stream=audio,stream_selector=%d,language=%s,output=%s,playlist_name=%s", tempFilePath, i, language, outputFile, playlistName))
+			outputFiles = append(outputFiles, outputFile)
+		}
+	}
+
+	masterPlaylist := filepath.Join(tempDir, "master.m3u8")
+	packagerCommand = append(packagerCommand, fmt.Sprintf("--hls_master_playlist_output=%s", masterPlaylist))
+	packagerCommand = append(packagerCommand, "--segment_duration=6")
+
+	fmt.Println(strings.Join(packagerCommand, " "))
+
+	cmd = exec.Command("packager", packagerCommand...)
+	packagerOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Shaka Packager Error: %v, Output: %s", err, string(packagerOutput))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to convert file to HLS",
+			"details": string(packagerOutput),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          "HLS conversion completed successfully",
+		"master_playlist":  masterPlaylist,
+		"output_files":     outputFiles,
+		"packager_command": packagerCommand,
+		"packager_output":  string(packagerOutput),
+	})
 }

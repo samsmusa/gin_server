@@ -10,6 +10,10 @@ func main() {
 	r := gin.Default()
 
 	r.POST("/run-packager", services.RunShakaPackager)
+	r.POST("/convert", func(c *gin.Context) {
+		file, _ := services.SingleFileHandler(c)
+		services.ConvertToHLS(c, file)
+	})
 	r.POST("/meta", services.GetShakaPackagerInfo)
 	r.POST("/file-meta", func(c *gin.Context) {
 		file, _ := services.SingleFileHandler(c)
